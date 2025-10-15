@@ -15,18 +15,35 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps
 
-      # Start Netlify Dev (builds, serves dist, and runs functions)
-      - run: npx netlify dev -c "npm run build" --port 8888 --dir dist --functions netlify/functions & echo $! > .netlify.pid
+      # Install helpers so we can run Netlify Dev and wait for healthz
+      - run: npm i -D netlify-cli wait-on
 
-      # Wait for healthz to come up (simple curl loop)
-      - run: |
-          for i in {1..30}; do
-            curl -sf http://localhost:8888/.netlify/functions/healthz && break
-            sleep 1
-          done
+      # Start Netlify Dev (builds once, serves dist, runs functions) in background
+      - name: Start Netlify Dev
+        run: |
+          set -euo pipefail
+          npx netlify dev -c "npm run build" --port 8888 --dir dist --functions netlify/functions > netlify.dev.log 2>&1 &
+          echo $! > .netlify.pid
 
+      # Block until healthz comes up (2 min timeout); if not, print logs and fail
+      - name: Wait for healthz
+        run: |
+          set -euo pipefail
+          npx wait-on http://localhost:8888/.netlify/functions/healthz --timeout 120000 || {
+            echo "::error::Netlify Dev did not become healthy in time"
+            sed -n '1,200p' netlify.dev.log || true
+            exit 1
+          }
+          # Final hard check to ensure non-200 doesn't slip through
+          curl -sf http://localhost:8888/.netlify/functions/healthz > /dev/null
+
+      # Run smoke tests against the live local server
       - run: BASE_URL=http://localhost:8888 npm run test:smoke
 
-      # Always stop Netlify Dev, even if tests failed
+      # On failure, show the Netlify Dev log for debugging
+      - if: ${{ failure() }}
+        run: sed -n '1,200p' netlify.dev.log || true
+
+      # Always stop Netlify Dev
       - if: ${{ always() }}
         run: kill $(cat .netlify.pid) || true
