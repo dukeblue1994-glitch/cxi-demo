@@ -4,7 +4,7 @@
   functions = "netlify/functions"
 
 [dev]
-  publish   = "src"
+  publish   = "dist"
   functions = "netlify/functions"
   port = 8888
 
@@ -17,3 +17,4 @@
   from = "/*"
   to   = "/index.html"
   status = 200
+
