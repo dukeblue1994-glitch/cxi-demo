@@ -1,0 +1,26 @@
+[build]
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/.netlify/functions/stream-analysis"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Connection = "keep-alive"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[dev]
+  command = "vite"
+  port = 8888
+  targetPort = 5173
